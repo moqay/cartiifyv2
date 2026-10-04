@@ -25,17 +25,29 @@ $(function () {
   $('#modal').on('click', function (e) { if ($(e.target).is('#modal, .modal-x')) closeModal(); });
 
   var screens = {};
-  function stat(l, v, d) { return '<div class="stat"><span>' + l + '</span><b>' + v + '</b><em>' + d + '</em></div>'; }
 
   screens.dashboard = function () {
-    var total = site.orders.reduce(function (a, o) { return a + o.total; }, 0);
-    var bars = [38, 52, 44, 68, 59, 81, 74, 92, 70, 88, 96, 84].map(function (h) { return '<i style="height:' + h + '%"></i>'; }).join('');
-    var rows = site.orders.slice(0, 4).map(function (o) { return '<tr><td>' + o.number + '</td><td>' + esc(o.customer) + '</td><td>' + fmt(o.total) + '</td><td><span class="tag ' + o.status + '">' + statusLabel[o.status] + '</span></td></tr>'; }).join('');
-    var welcome = S.welcome ? '<div class="welcome"><div><h3>🎉 أهلاً ' + esc(S.user.name.split(' ')[0]) + '! متجرك جاهز</h3><p>رابط متجرك: <b dir="ltr">' + site.sub + '.cartiify.com</b> — أضفنا منتجات تجريبية من قالب «' + C.templates[site.template].name + '» لتبدأ بها.</p></div><div class="wl-act"><a class="btn btn-primary btn-sm" href="/store/' + site.sub + '" target="_blank">زيارة متجرك</a><button class="btn btn-ghost btn-sm" id="dismiss">إخفاء</button></div></div>' : '';
-    return welcome + '<div class="stats">' + stat('المبيعات', fmt(total), '+18%') + stat('الطلبات', site.orders.length, '+9%') + stat('المنتجات', site.products.length, 'نشطة') + stat('الزوار', '1,248', '+24%') + '</div>' +
-      '<div class="two"><section class="panel"><h3>المبيعات خلال 12 أسبوع</h3><div class="chart">' + bars + '</div></section>' +
-      '<section class="panel"><h3>أحدث الطلبات</h3><table class="tbl"><tbody>' + rows + '</tbody></table></section></div>';
+    var welcome = S.welcome && !S.demo ? '<div class="welcome"><div><h3>أهلاً ' + esc(S.user.name.split(' ')[0]) + '، متجرك جاهز</h3><p>رابط متجرك: <b dir="ltr">' + site.sub + '.cartiify.com</b> — أضفنا منتجات من قالب «' + C.templates[site.template].name + '» لتبدأ بها.</p></div><div class="wl-act"><a class="btn btn-primary btn-sm" href="/store/' + site.sub + '" target="_blank">زيارة متجرك</a><button class="btn btn-ghost btn-sm" id="dismiss">إخفاء</button></div></div>' : '';
+    var rows = site.orders.slice(0, 6).map(function (o) { return '<tr data-view="' + o.id + '" class="clk"><td>' + o.number + '</td><td>' + esc(o.customer) + '</td><td>' + fmt(o.total) + '</td><td><span class="tag ' + o.status + '">' + statusLabel[o.status] + '</span></td></tr>'; }).join('');
+    return welcome + '<div class="range"><button data-days="7" class="' + (days === 7 ? 'on' : '') + '">آخر 7 أيام</button><button data-days="30" class="' + (days === 30 ? 'on' : '') + '">آخر 30 يوماً</button></div>' +
+      '<div class="stats" id="stats"><div class="stat sk"></div><div class="stat sk"></div><div class="stat sk"></div><div class="stat sk"></div></div>' +
+      '<div class="two"><section class="panel"><h3>المبيعات</h3><div class="chart" id="chart"></div></section>' +
+      '<section class="panel"><h3>أحدث الطلبات</h3><table class="tbl" id="recent"><tbody>' + rows + '</tbody></table></section></div>' +
+      '<section class="panel" style="margin-top:18px"><h3>الأكثر مبيعاً</h3><div id="top" class="toplist"></div></section>';
   };
+
+  var days = 7;
+  function pct(d) { return d === null ? '<em class="flat">—</em>' : '<em class="' + (d >= 0 ? '' : 'down') + '">' + (d >= 0 ? '+' : '') + d + '%</em>'; }
+  function loadStats() {
+    C.api('GET', '/api/stats?days=' + days).done(function (r) {
+      if (!$('#stats').length) return;
+      $('#stats').html(stat('المبيعات', fmt(r.sales), pct(r.salesDelta)) + stat('الطلبات', r.orders, pct(r.ordersDelta)) + stat('متوسط الطلب', fmt(r.aov), '<em class="flat">لكل طلب</em>') + stat('الزوار', r.visits.toLocaleString('en-US'), '<em class="flat">تحويل ' + r.conversion + '%</em>'));
+      var max = Math.max.apply(null, r.series.map(function (x) { return x.sales; })) || 1;
+      $('#chart').html(r.series.map(function (x) { return '<i style="height:' + Math.max(3, x.sales / max * 100) + '%" data-tip="' + x.label + ' · ' + fmt(x.sales) + ' · ' + x.orders + ' طلب"></i>'; }).join(''));
+      $('#top').html(r.top.length ? r.top.map(function (t, i) { return '<div class="trow"><span class="rk">' + (i + 1) + '</span><span class="thumb">' + t.emoji + '</span><b>' + esc(t.name) + '</b><span>' + t.qty + ' قطعة</span><em>' + fmt(t.revenue) + '</em></div>'; }).join('') : '<p class="hint">لا توجد مبيعات في هذه الفترة.</p>');
+    });
+  }
+  function stat(l, v, d) { return '<div class="stat"><span>' + l + '</span><b>' + v + '</b>' + d + '</div>'; }
 
   function storePreview() {
     var cards = site.products.slice(0, 4).map(function (p) { return '<div class="sp-card"><div class="sp-img">' + p.emoji + '</div><b>' + esc(p.name) + '</b><span>' + fmt(p.price) + '</span></div>'; }).join('');
@@ -67,8 +79,8 @@ $(function () {
   };
 
   screens.orders = function () {
-    var rows = site.orders.map(function (o, i) { return '<tr><td>' + o.id + '</td><td>' + esc(o.customer) + '</td><td>' + o.date + '</td><td>' + fmt(o.total) + '</td><td><button class="tag ' + o.status + '" data-o="' + i + '">' + statusLabel[o.status] + '</button></td></tr>'; }).join('');
-    return '<p class="hint">اضغط على الحالة لتغييرها.</p><section class="panel"><table class="tbl"><thead><tr><th>الطلب</th><th>العميل</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody>' + rows + '</tbody></table></section>';
+    var rows = site.orders.map(function (o, i) { return '<tr class="clk" data-view="' + o.id + '"><td>' + o.number + '</td><td>' + esc(o.customer) + '</td><td>' + o.date + ' · ' + o.time + '</td><td>' + (o.payment === 'card' ? 'بطاقة' : 'عند الاستلام') + '</td><td>' + fmt(o.total) + '</td><td><button class="tag ' + o.status + '" data-o="' + i + '">' + statusLabel[o.status] + '</button></td></tr>'; }).join('');
+    return '<p class="hint">اضغط على الطلب لعرض تفاصيله، وعلى الحالة لتغييرها.</p><section class="panel"><table class="tbl"><thead><tr><th>الطلب</th><th>العميل</th><th>الوقت</th><th>الدفع</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody>' + rows + '</tbody></table></section>';
   };
 
   function sw(k, i, on) { return '<label class="sw"><input type="checkbox" data-k="' + k + '" data-i="' + i + '"' + (on ? ' checked' : '') + '><span></span></label>'; }
@@ -110,11 +122,14 @@ $(function () {
     setTimeout(function () { $m.text(r); $('#msgs').scrollTop(99999); }, 700);
   }
 
+  var current = 'dashboard';
   function show(name) {
     if (!screens[name]) name = 'dashboard';
     $('#menu a').removeClass('active').filter('[data-screen="' + name + '"]').addClass('active');
     $('#screen-title').text(titles[name]);
+    current = name;
     $('#screen').html(screens[name]()).hide().fadeIn(150);
+    if (name === 'dashboard') loadStats();
     history.replaceState(null, '', '#' + name);
   }
 
@@ -180,6 +195,30 @@ $(function () {
   });
   $s.on('click', '[data-plan]', function () { var p = $(this).data('plan'); api('PUT', '/api/plan', { plan: p }).done(function () { S.plan = p; header(); show('settings'); toast('تم تغيير الباقة إلى ' + C.plans[p].name); }); });
   $s.on('click', '#reset', function () { if (confirm('سيتم حذف المتجر والحساب نهائياً. متأكد؟')) { api('DELETE', '/api/account').done(function (r) { location.href = r.redirect; }); } });
+
+  $s.on('click', '[data-days]', function () { days = +$(this).data('days'); $('.range button').removeClass('on'); $(this).addClass('on'); loadStats(); });
+  $s.on('click', '[data-view]', function (e) {
+    if ($(e.target).is('[data-o]')) return;
+    var id = $(this).data('view'), o = site.orders.filter(function (x) { return x.id == id; })[0];
+    if (!o) return;
+    var lines = (o.items || []).map(function (l) { return '<div class="trow"><span class="thumb">' + (l.emoji || '📦') + '</span><b>' + esc(l.name) + '</b><span>× ' + l.qty + '</span><em>' + fmt(l.qty * l.price) + '</em></div>'; }).join('');
+    modal('<h3>طلب ' + o.number + '</h3><p class="hint">' + o.date + ' · ' + o.time + '</p>' + lines + '<div class="trow tot"><b>الإجمالي</b><em>' + fmt(o.total) + '</em></div>' +
+      '<div class="cust"><div><small>العميل</small><b>' + esc(o.customer) + '</b></div><div><small>الهاتف</small><b dir="ltr">' + esc(o.phone || '—') + '</b></div><div><small>العنوان</small><b>' + esc(o.address || '—') + '</b></div><div><small>الدفع</small><b>' + (o.payment === 'card' ? 'بطاقة' : 'عند الاستلام') + '</b></div></div>');
+  });
+
+  var unread = 0;
+  function poll() {
+    var last = site.orders.reduce(function (m, o) { return Math.max(m, o.id); }, 0);
+    C.api('GET', '/api/orders/feed?after=' + last).done(function (r) {
+      if (!r.orders.length) return;
+      r.orders.forEach(function (o) { site.orders.unshift(o); toast('طلب جديد ' + o.number + ' · ' + o.customer + ' · ' + fmt(o.total)); });
+      unread += r.orders.length; $('#bell-n').text(unread).prop('hidden', false);
+      if (current === 'orders' || current === 'dashboard') { var y = $s.scrollTop(); show(current); $s.scrollTop(y); }
+    });
+  }
+  setInterval(poll, 9000);
+  $('#bell').on('click', function () { unread = 0; $('#bell-n').prop('hidden', true); show('orders'); });
+  if (S.demo) $('#demo-bar').prop('hidden', false);
 
   show(location.hash.slice(1));
 });

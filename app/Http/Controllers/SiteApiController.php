@@ -6,6 +6,7 @@ use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class SiteApiController extends Controller
@@ -68,6 +69,62 @@ class SiteApiController extends Controller
         $order->update(['status' => Order::FLOW[$order->status]]);
 
         return response()->json(['status' => $order->status]);
+    }
+
+    public function stats(Request $request): JsonResponse
+    {
+        $site = $request->user()->site;
+        $days = $request->integer('days') === 30 ? 30 : 7;
+        $from = now()->subDays($days - 1)->startOfDay();
+        $prevFrom = $from->copy()->subDays($days);
+
+        $orders = $site->orders()->where('created_at', '>=', $prevFrom)->get();
+        $cur = $orders->filter(fn ($o) => $o->created_at >= $from);
+        $prev = $orders->filter(fn ($o) => $o->created_at < $from);
+
+        $series = [];
+        for ($i = 0; $i < $days; $i++) {
+            $d = $from->copy()->addDays($i);
+            $day = $cur->filter(fn ($o) => $o->created_at->isSameDay($d));
+            $series[] = ['label' => $d->format('m/d'), 'sales' => (float) $day->sum('total'), 'orders' => $day->count()];
+        }
+
+        $top = [];
+        foreach ($cur as $o) {
+            foreach ($o->items ?? [] as $l) {
+                $top[$l['name']] ??= ['name' => $l['name'], 'emoji' => $l['emoji'] ?? '📦', 'qty' => 0, 'revenue' => 0];
+                $top[$l['name']]['qty'] += $l['qty'];
+                $top[$l['name']]['revenue'] += $l['qty'] * $l['price'];
+            }
+        }
+        usort($top, fn ($a, $b) => $b['revenue'] <=> $a['revenue']);
+
+        $delta = fn ($a, $b) => $b > 0 ? round(($a - $b) / $b * 100) : null;
+        $sales = (float) $cur->sum('total');
+        $totalOrders = $site->orders()->count();
+
+        return response()->json([
+            'sales' => $sales, 'salesDelta' => $delta($sales, (float) $prev->sum('total')),
+            'orders' => $cur->count(), 'ordersDelta' => $delta($cur->count(), $prev->count()),
+            'aov' => $cur->count() ? round($sales / $cur->count()) : 0,
+            'visits' => $site->visits, 'conversion' => $site->visits ? round($totalOrders / $site->visits * 100, 1) : 0,
+            'series' => $series, 'top' => array_slice($top, 0, 5),
+        ]);
+    }
+
+    public function feed(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $site = $user->site;
+        $after = $request->integer('after');
+
+        if ($user->is_demo && random_int(1, 100) <= 55 && ! $site->orders()->where('created_at', '>', now()->subSeconds(10))->exists()) {
+            $site->createOrder($site->products()->get(), null, 'new', now());
+        }
+
+        $new = $site->orders()->where('id', '>', $after)->reorder('id')->get()->map(fn ($o) => $o->toRow())->values();
+
+        return response()->json(['orders' => $new]);
     }
 
     public function changePlan(Request $request): JsonResponse

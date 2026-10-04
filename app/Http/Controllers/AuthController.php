@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
@@ -47,6 +48,29 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return response()->json(['redirect' => route('dashboard')]);
+    }
+
+    public function demo(Request $request): JsonResponse|\Illuminate\Http\RedirectResponse
+    {
+        $templates = array_keys(config('cartiify.templates'));
+        $tpl = $request->input('template');
+        $tpl = in_array($tpl, $templates, true) ? $tpl : $templates[array_rand($templates)];
+        $id = Str::lower(Str::random(6));
+
+        $user = DB::transaction(function () use ($id, $tpl) {
+            $user = User::create([
+                'name' => 'زائر تجريبي', 'email' => "demo-{$id}@demo.cartiify.com", 'password' => Str::random(24),
+                'plan' => 'growth', 'trial_ends_at' => now()->addDays(config('cartiify.trial_days')), 'welcome' => true, 'is_demo' => true,
+            ]);
+            Site::provision($user, ['sname' => 'متجري التجريبي', 'sub' => "demo-{$id}", 'template' => $tpl, 'currency' => 'EGP'], true);
+
+            return $user;
+        });
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return $request->expectsJson() ? response()->json(['redirect' => route('dashboard')]) : redirect()->route('dashboard');
     }
 
     public function login(Request $request): JsonResponse

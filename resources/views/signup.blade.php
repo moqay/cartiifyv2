@@ -3,9 +3,14 @@
 <head>
 <title>أنشئ متجرك — Cartiify</title>
 @include('partials.head')
+<link rel="stylesheet" href="{{ asset('css/landing.css') }}">
 </head>
 <body class="auth">
-<header class="auth-top"><a href="{{ route('landing') }}" class="logo"><span class="logo-mark">C</span> Cartiify</a><span>لديك حساب؟ <a class="lnk" href="{{ route('login') }}">سجّل الدخول</a></span></header>
+<div class="auth-wrap">
+<aside class="auth-side"><a href="{{ route('landing') }}" class="logo"><span class="logo-mark">C</span> Cartiify</a>
+  <div><h2>متجرك الإلكتروني جاهز في دقائق</h2><ul><li>بيلدر مرئي بالسحب والإفلات</li><li>9 بوابات دفع محلية</li><li>مساعد ذكاء اصطناعي</li><li>14 يوم تجربة مجانية بدون بطاقة</li></ul></div>
+  <small>© {{ date('Y') }} Cartiify</small></aside>
+<div class="auth-main"><div class="auth-top"><span></span><span>لديك حساب؟ <a class="lnk" href="{{ route('login') }}">سجّل الدخول</a></span></div>
 
 <main class="wiz">
   <ol class="wiz-steps" id="wiz-steps"><li class="on">الباقة</li><li>الحساب</li><li>المتجر</li><li>الإنشاء</li></ol>
@@ -48,6 +53,7 @@
     </div>
   </section>
 </main>
+</div></div>
 <script src="{{ asset('js/signup.js') }}"></script>
 </body>
 </html>

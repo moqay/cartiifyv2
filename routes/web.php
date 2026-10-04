@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'landing')->name('landing');
 Route::get('/store/{site:subdomain}', StoreController::class)->name('store');
+Route::post('/store/{site:subdomain}/checkout', [StoreController::class, 'checkout'])->middleware('throttle:30,1');
 Route::get('/api/subdomain', [AuthController::class, 'checkSubdomain']);
 
 Route::middleware('guest')->group(function () {
     Route::view('/signup', 'signup')->name('signup');
     Route::view('/login', 'login')->name('login');
+    Route::post('/demo', [AuthController::class, 'demo'])->middleware('throttle:10,1');
     Route::post('/signup', [AuthController::class, 'signup']);
     Route::post('/login', [AuthController::class, 'login']);
 });
@@ -22,6 +24,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::prefix('api')->group(function () {
+        Route::get('/stats', [SiteApiController::class, 'stats']);
+        Route::get('/orders/feed', [SiteApiController::class, 'feed']);
         Route::put('/site', [SiteApiController::class, 'update']);
         Route::put('/site/toggle', [SiteApiController::class, 'toggle']);
         Route::post('/products', [SiteApiController::class, 'storeProduct']);
@@ -33,3 +37,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/account', [SiteApiController::class, 'destroyAccount']);
     });
 });
+
+Route::view('/privacy', 'pages.privacy')->name('privacy');
+Route::view('/terms', 'pages.terms')->name('terms');
+Route::view('/contact', 'pages.contact')->name('contact');

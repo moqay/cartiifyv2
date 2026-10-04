@@ -16,6 +16,7 @@ class DashboardController extends Controller
             'plan' => $user->plan,
             'trialEnds' => $user->trial_ends_at?->getTimestampMs(),
             'welcome' => $user->welcome,
+            'demo' => $user->is_demo,
             'site' => $user->site->toState(),
         ]]);
     }

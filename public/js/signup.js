@@ -81,6 +81,8 @@ $(function () {
     function finish() { if (animDone && res) setTimeout(function () { location.href = res.redirect; }, 400); }
   }
 
+  var pre = new URLSearchParams(location.search).get('store');
+  if (pre) { $('[name=sub]').val(pre).trigger('input'); subTouched = true; }
   $('#sel-plan').text(C.plans[data.plan].name);
   go(1);
 });
